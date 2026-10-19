@@ -53,6 +53,7 @@ tr.cur td{background:#e8b92326!important;font-weight:700}
 <div class="wrap" id="app" style="display:none"><section>
 <div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="cards" id="acards"></div>
 <h2>Account Summary</h2><div class="scroll" id="tAcc"></div>
+<h2>Interest Earned · 2026</h2><div class="scroll" id="tHist"></div>
 <h2>Interest by Month · Next 12 Months</h2><div class="chartbox" id="cProj"></div><div class="scroll" style="margin-top:12px" id="tProj"></div>
 </section><br></div>
 <script>
@@ -99,12 +100,13 @@ function fx(){const vis=[...document.querySelectorAll('#app section')].filter(s=
  vis.forEach(s=>s.querySelectorAll('td:not(.t),.card .v').forEach(e=>{if(e.children.length==0)countUp(e)}));
  setTimeout(()=>document.querySelectorAll('.bar i').forEach(i=>i.style.width=i.dataset.w+'%'),RM?0:300);}
 function render(){const A=D.acc,T=D.tot,nm=Object.fromEntries(A.map(a=>[a.k,a.name]));
- document.getElementById('hero').innerHTML=card('Total savings',T.bal,`${A.length} accounts · blended ${T.apy.toFixed(2)}% APY`,'',1)+card('Monthly interest',T.mon,'All accounts','',1)+card('Annual interest',T.ann,'All accounts at current APY','',1);
+ document.getElementById('hero').innerHTML=card('Total savings',T.bal,`${A.length} accounts · blended ${T.apy.toFixed(2)}% APY`,'',1)+card('Monthly interest',T.mon,'All accounts','',1)+card('Annual interest',T.ann,'All accounts at current APY','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026 · since Jan 1, 2026`,'',1);
  document.getElementById('acards').innerHTML=A.map(a=>card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${a.apy}% APY`,a.bal,`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`,bar(a.bal/T.bal*100,COL[a.k]))).join('');
  tbl('tAcc',['Account','Balance','APY','Monthly interest','Annual interest','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,M(a.bal),N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
  const lab=s=>MO[+s.slice(5,7)-1]+' '+s.slice(0,4);
  stacked('cProj',D.proj.map(r=>({label:lab(r[0]),vals:Object.fromEntries(A.map((a,i)=>[a.k,r[1+i]]))})),A.map(a=>a.k),COL,nm);
  tbl('tProj',['Month',...A.map(a=>a.name+' interest'),'Total interest','Cumulative'],D.proj.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map(a=>M(a.ann)),M(T.ann),'—']);
+ tbl('tHist',['Month',...A.map(a=>a.name+' interest'),'Total interest','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
  fx();}
 async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;}catch(x){document.getElementById('err').textContent='Wrong password';return;}
  document.getElementById('gate').remove();document.getElementById('app').style.display='';document.getElementById('gen').textContent='Updated '+D.generated;render();}
