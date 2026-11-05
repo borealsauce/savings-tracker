@@ -63,6 +63,7 @@ td.ed{padding:4px 8px!important}
 <h2>Account Summary</h2><div class="scroll" id="tAcc"></div>
 <h2>Credit Card Liabilities</h2><div class="cards" id="liabCards" style="margin-bottom:12px"></div><div class="scroll" id="tLiab"></div>
 <h2>Interest Earned · 2026</h2><div class="scroll" id="tHist"></div>
+<h2>Cash Held · 2026</h2><div class="muted" style="font-size:12px;margin-bottom:6px">Cash accounts only (excludes Schwab equity). Flat at current editable balances.</div><div class="chartbox" id="cCash"></div><div class="scroll" style="margin-top:12px" id="tCash"></div>
 <h2>Prior Years · Interest</h2><div class="muted" style="font-size:12px;margin-bottom:6px">Schedule B totals by year. 2021–2022 unreadable, omitted.</div><div class="scroll" id="tTax"></div>
 </section><br></div>
 <script>
@@ -96,10 +97,26 @@ function applyEdits(){const e=loadEdits();let ch=false;D.acc.forEach(a=>{if(e[a.
   D.hist=rebuild(D.hist);let c=0;D.hist.forEach(r=>{c=r2(c+r[r.length-2]);r[r.length-1]=c});
   D.proj=rebuild(D.proj);c=0;D.proj.forEach(r=>{c=r2(c+r[r.length-2]);r[r.length-1]=c});
   D.ytd=r2(D.hist.reduce((s,r)=>s+r[r.length-2],0));
+  const cash=r2(D.acc.filter(a=>a.k!=='schwab').reduce((s,a)=>s+a.bal,0));
+  D.cash_tot=cash;
+  if(D.cash_hist&&D.cash_hist.length)D.cash_hist=D.cash_hist.map(r=>[r[0],cash]);
+  else{const y=new Date().getFullYear();D.cash_hist=[];for(let m=1;m<=12;m++)D.cash_hist.push([`${y}-${String(m).padStart(2,'0')}-01`,cash]);}
   return ch;}
 function saveEdits(){const e={};document.querySelectorAll('input.bal').forEach(inp=>{const v=parseFloat(String(inp.value).replace(/[$,]/g,''));if(isFinite(v))e[inp.dataset.k]=v});
   localStorage.setItem(LS,JSON.stringify(e));applyEdits();document.getElementById('editHint').textContent='Saved locally · '+new Date().toLocaleString();render();}
 function resetEdits(){localStorage.removeItem(LS);location.reload();}
+
+
+function cashBars(id,rows){const W=900,Hh=220,P=52;const vals=rows.map(r=>r[1]);const mx=Math.max(...vals,1);
+ const step=(W-P-20)/rows.length,bw=Math.min(48,step*0.7);
+ let g=`<line x1="${P}" x2="${W}" y1="${Hh-24}" y2="${Hh-24}" stroke="#525252"/>`;
+ [mx,mx/2].forEach(v=>{const y=Hh-24-(v/mx)*(Hh-50);g+=`<text x="${P-6}" y="${y+4}" text-anchor="end">${$k(v)}</text><line x1="${P}" x2="${W}" y1="${y}" y2="${y}" stroke="#1f1f1f"/>`});
+ rows.forEach((r,i)=>{const x=P+10+i*step+(step-bw)/2;const h=(r[1]/mx)*(Hh-50);const y=Hh-24-h;
+  g+=`<rect x="${x}" width="${bw}" y="${Hh-24}" height="0" data-y="${y}" data-h="${h}" fill="#38bdf8" rx="3"><title>${MO[+r[0].slice(5,7)-1]}: ${$(r[1])}</title></rect>`;
+  g+=`<text x="${x+bw/2}" y="${Hh-8}" text-anchor="middle">${MO[+r[0].slice(5,7)-1]}</text>`;
+  if(rows.length<=12)g+=`<text x="${x+bw/2}" y="${y-6}" text-anchor="middle" style="fill:#f5f5f5;font-weight:700;font-size:10px">${$k(r[1])}</text>`;});
+ document.getElementById(id).innerHTML=`<svg viewBox="0 0 ${W} ${Hh}">${g}</svg>`;
+ setTimeout(()=>document.querySelectorAll('#'+id+' rect').forEach(r=>{r.setAttribute('y',r.dataset.y);r.setAttribute('height',r.dataset.h)}),RM?0:250);}
 
 let D,tab;
 function stacked(id,groups,keys,colors,names){const W=900,Hh=260,P=46;let mx=0,mn=0;
@@ -135,6 +152,7 @@ function render(){const A=D.acc,T=D.tot,nm=Object.fromEntries(A.map(a=>[a.k,a.na
 
  if(D.tax){const by={};D.tax.forEach(r=>{by[r[0]]=(by[r[0]]||0)+r[2]});const yrs=Object.keys(by).map(Number).sort((a,b)=>b-a);tbl('tTax',['Year','Interest earned'],yrs.map(y=>[y,M(by[y])]),['TOTAL',M(yrs.reduce((s,y)=>s+by[y],0))]);}
  tbl('tHist',['Month',...A.map(a=>a.name+' interest'),'Total interest','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
+ if(document.getElementById('cCash')&&D.cash_hist){cashBars('cCash',D.cash_hist);tbl('tCash',['Month','Cash held'],D.cash_hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},M(r[1])]),['AVG / NOW',M(D.cash_tot||0)]);}
  fx();}
 async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;applyEdits();}catch(x){document.getElementById('err').textContent='Wrong password';return;}
  document.getElementById('gate').remove();document.getElementById('app').style.display='';document.getElementById('gen').textContent='Updated '+D.generated;render();}
