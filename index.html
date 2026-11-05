@@ -90,7 +90,12 @@ const sum=a=>r2(a.reduce((x,y)=>x+(y||0),0));
 const LS='savings_balances_v1';
 function loadEdits(){try{return JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){return{}}}
 function applyEdits(){const e=loadEdits();let ch=false;D.acc.forEach(a=>{if(e[a.k]!=null&&isFinite(+e[a.k])){a.bal=+e[a.k];ch=true}});
-  D.acc.forEach(a=>{a.ann=r2(a.bal*a.apy/100);a.mon=r2(a.ann/12)});
+  D.acc.forEach(a=>{
+    if(a.k==='schwab'&&(a.div_ann!=null||(D.div_proj&&D.div_proj.ann!=null))){
+      a.div_ann=a.div_ann!=null?a.div_ann:D.div_proj.ann; a.div_mon=a.div_mon!=null?a.div_mon:D.div_proj.mon;
+      a.ann=a.div_ann; a.mon=a.div_mon; a.apy=a.bal?r2(a.div_ann/a.bal*100):0; a.income='dividends';
+    } else { a.ann=r2(a.bal*a.apy/100); a.mon=r2(a.ann/12); }
+  });
   const T=D.tot;T.bal=r2(D.acc.reduce((s,a)=>s+a.bal,0));T.ann=r2(D.acc.reduce((s,a)=>s+a.ann,0));T.mon=r2(T.ann/12);T.apy=T.bal?r2(T.ann/T.bal*100):0;
   // rebuild hist/proj monthly interest columns from current bals
   const rebuild=rows=>rows.map(r=>{const mons=D.acc.map(a=>a.mon);const tot=r2(mons.reduce((x,y)=>x+y,0));return [r[0],...mons,tot,0]});
@@ -144,15 +149,15 @@ function fx(){const vis=[...document.querySelectorAll('#app section')].filter(s=
 function render(){const A=D.acc,T=D.tot,nm=Object.fromEntries(A.map(a=>[a.k,a.name]));
  const L=D.liab||{},cc=(L.cc||{}),ccTot=cc.total||0,liq=r2(T.bal-ccTot);
  const cashTot=r2(A.filter(a=>a.k!=='schwab').reduce((s,a)=>s+a.bal,0));
- document.getElementById('hero').innerHTML=card('Cash savings',cashTot,`Excludes Schwab · ${A.filter(a=>a.k!=='schwab').length} cash accounts`,'',1)+card('If liquidated today',liq,`All assets − credit cards`,'',1)+card('Credit card liabilities',ccTot,`Net across ${((cc.rows)||[]).length} linked cards`,'',1)+card('Monthly interest',T.mon,'Cash APY accounts only','',1)+card('Annual interest',T.ann,'Cash APY accounts only','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026`,'',1);
+ document.getElementById('hero').innerHTML=card('Cash savings',cashTot,`Excludes Schwab · ${A.filter(a=>a.k!=='schwab').length} cash accounts`,'',1)+card('If liquidated today',liq,`All assets − credit cards`,'',1)+card('Credit card liabilities',ccTot,`Net across ${((cc.rows)||[]).length} linked cards`,'',1)+card('Monthly income',T.mon,'Cash interest + Schwab projected dividends','',1)+card('Annual income',T.ann,'Cash interest + Schwab Investment Income proj','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026`,'',1);
  if(document.getElementById('liabCards'))document.getElementById('liabCards').innerHTML=card('Total credit card liabilities',ccTot,`Updated with account balances`,'',1)+card('Cards with balance',((cc.rows)||[]).filter(r=>r[1]>0).length,`of ${((cc.rows)||[]).length} linked cards`)+card('Largest balance',Math.max(0,...((cc.rows)||[]).map(r=>r[1])),((cc.rows)||[]).slice().sort((a,b)=>b[1]-a[1])[0]?.[0]||'—');
  if(document.getElementById('tLiab')&&cc.rows)tbl('tLiab',['Card','Balance owed'],cc.rows.map(r=>[r[0],M(r[1])]),['TOTAL',M(ccTot)]);
- document.getElementById('acards').innerHTML=A.map(a=>card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${a.apy}% APY`,a.bal,`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`,bar(a.bal/T.bal*100,COL[a.k]))).join('');
- tbl('tAcc',['Account','Balance','APY','Monthly interest','Annual interest','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,{v:`<input class="bal" data-k="${a.k}" type="text" inputmode="decimal" value="${a.bal.toLocaleString('en-US',{maximumFractionDigits:2})}">`,c:'ed',d:a.bal},N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
+ document.getElementById('acards').innerHTML=A.map(a=>{const lab=a.income==='dividends'?`proj dividends · Schwab Investment Income${a.div_asof||(D.div_proj&&D.div_proj.asof)?' · as of '+(a.div_asof||D.div_proj.asof):''}`:`${a.apy}% APY`; const sub=a.income==='dividends'?`${$(a.mon)}/mo · ${$(a.ann)}/yr projected`:`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`; return card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${lab}`,a.bal,sub,bar(a.bal/T.bal*100,COL[a.k]));}).join('');
+ tbl('tAcc',['Account','Balance','APY / yield','Monthly income','Annual income','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,{v:`<input class="bal" data-k="${a.k}" type="text" inputmode="decimal" value="${a.bal.toLocaleString('en-US',{maximumFractionDigits:2})}">`,c:'ed',d:a.bal},N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
  const lab=s=>MO[+s.slice(5,7)-1]+' '+s.slice(0,4);
 
  if(D.tax){const by={};D.tax.forEach(r=>{by[r[0]]=(by[r[0]]||0)+r[2]});const yrs=Object.keys(by).map(Number).sort((a,b)=>b-a);tbl('tTax',['Year','Interest earned'],yrs.map(y=>[y,M(by[y])]),['TOTAL',M(yrs.reduce((s,y)=>s+by[y],0))]);}
- tbl('tHist',['Month',...A.map(a=>a.name+' interest'),'Total interest','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
+ tbl('tHist',['Month',...A.map(a=>a.income==='dividends'?a.name+' dividends':a.name+' interest'),'Total income','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
  if(document.getElementById('cCash')&&D.cash_hist){cashBars('cCash',D.cash_hist);tbl('tCash',['Month','Cash held'],D.cash_hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},M(r[1])]),['AVG / NOW',M(D.cash_tot||0)]);}
  fx();}
 async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;applyEdits();}catch(x){document.getElementById('err').textContent='Wrong password';return;}
