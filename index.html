@@ -47,11 +47,19 @@ tr.dim td{color:var(--muted)}th.t,td.t{text-align:left!important}
 tr.cur td{background:#e8b92326!important;font-weight:700}
 .info{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--muted);font-size:13px;margin:2px 0 14px}.info b{color:var(--txt);font-weight:600}
 .card .v.sm{font-size:20px}
+
+.editbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0 4px}
+.editbar button{font:700 13px Inter;padding:8px 14px;border:0;border-radius:999px;background:var(--gold);color:#050505;cursor:pointer}
+.editbar button.ghost{background:transparent;color:var(--gold);border:1px solid var(--gb)}
+.editbar .hint{color:var(--muted);font-size:12px}
+input.bal{width:140px;font:600 14px Inter;padding:6px 8px;border:1px solid var(--gb);border-radius:8px;background:#0c0c0c;color:var(--txt);text-align:right}
+input.bal:focus{outline:1px solid var(--gold)}
+td.ed{padding:4px 8px!important}
 </style></head><body>
 <div id="gate"><form onsubmit="go(event)"><h1>Savings Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
 <div class="top"><div class="wrap"><h1>Savings Tracker</h1><div class="muted">Pibank · X Money · <span id="gen"></span></div></div></div>
 <div class="wrap" id="app" style="display:none"><section>
-<div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="cards" id="acards"></div>
+<div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="editbar"><button type="button" onclick="saveEdits()">Save balances</button><button type="button" class="ghost" onclick="resetEdits()">Reset to published</button><span class="hint" id="editHint">Click a balance to edit · saved in this browser</span></div><div class="cards" id="acards"></div>
 <h2>Account Summary</h2><div class="scroll" id="tAcc"></div>
 <h2>Interest Earned · 2026</h2><div class="scroll" id="tHist"></div>
 <h2>Prior Years · Interest by Bank (per tax return)</h2><div class="muted" style="font-size:12px;margin-bottom:6px">Schedule B actuals. 2021–2022 returns unreadable, not included.</div><div class="scroll" id="tTax"></div>
@@ -77,6 +85,22 @@ const N=(v,suf)=>({v:v==null?'—':v.toLocaleString('en-US',{minimumFractionDigi
 const cell=c=>{if(c&&typeof c=='object')return `<td class="${c.c||''}"${c.d!=null&&isFinite(c.d)?` data-v="${c.d}"`:''}>${c.v}</td>`;return `<td>${c??''}</td>`};
 function tbl(id,h,rows,foot,rc){const tx=h.map((_,j)=>rows.length&&rows.every(r=>!(r[j]&&typeof r[j]=='object')));const ce=(c,j)=>tx[j]?`<td class="t">${c??''}</td>`:cell(c);document.getElementById(id).innerHTML='<table><thead><tr>'+h.map((x,j)=>`<th class="${tx[j]?'t':''}">${x}</th>`).join('')+'</tr></thead><tbody>'+rows.map((r,i)=>`<tr class="${rc?rc(i):''}">`+r.map(ce).join('')+'</tr>').join('')+'</tbody>'+(foot?'<tfoot><tr class="ft">'+foot.map(ce).join('')+'</tr></tfoot>':'')+'</table>';}
 const sum=a=>r2(a.reduce((x,y)=>x+(y||0),0));
+
+const LS='savings_balances_v1';
+function loadEdits(){try{return JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){return{}}}
+function applyEdits(){const e=loadEdits();let ch=false;D.acc.forEach(a=>{if(e[a.k]!=null&&isFinite(+e[a.k])){a.bal=+e[a.k];ch=true}});
+  D.acc.forEach(a=>{a.ann=r2(a.bal*a.apy/100);a.mon=r2(a.ann/12)});
+  const T=D.tot;T.bal=r2(D.acc.reduce((s,a)=>s+a.bal,0));T.ann=r2(D.acc.reduce((s,a)=>s+a.ann,0));T.mon=r2(T.ann/12);T.apy=T.bal?r2(T.ann/T.bal*100):0;
+  // rebuild hist/proj monthly interest columns from current bals
+  const rebuild=rows=>rows.map(r=>{const mons=D.acc.map(a=>a.mon);const tot=r2(mons.reduce((x,y)=>x+y,0));return [r[0],...mons,tot,0]});
+  D.hist=rebuild(D.hist);let c=0;D.hist.forEach(r=>{c=r2(c+r[r.length-2]);r[r.length-1]=c});
+  D.proj=rebuild(D.proj);c=0;D.proj.forEach(r=>{c=r2(c+r[r.length-2]);r[r.length-1]=c});
+  D.ytd=r2(D.hist.reduce((s,r)=>s+r[r.length-2],0));
+  return ch;}
+function saveEdits(){const e={};document.querySelectorAll('input.bal').forEach(inp=>{const v=parseFloat(String(inp.value).replace(/[$,]/g,''));if(isFinite(v))e[inp.dataset.k]=v});
+  localStorage.setItem(LS,JSON.stringify(e));applyEdits();document.getElementById('editHint').textContent='Saved locally · '+new Date().toLocaleString();render();}
+function resetEdits(){localStorage.removeItem(LS);location.reload();}
+
 let D,tab;
 function stacked(id,groups,keys,colors,names){const W=900,Hh=260,P=46;let mx=0,mn=0;
  groups.forEach(g=>{let p=0,n=0;keys.forEach(k=>{const v=g.vals[k]||0;v>0?p+=v:n+=v});g.p=p;g.n=n;mx=Math.max(mx,p);mn=Math.min(mn,n)});
@@ -103,14 +127,14 @@ function fx(){const vis=[...document.querySelectorAll('#app section')].filter(s=
 function render(){const A=D.acc,T=D.tot,nm=Object.fromEntries(A.map(a=>[a.k,a.name]));
  document.getElementById('hero').innerHTML=card('Total savings',T.bal,`${A.length} accounts · blended ${T.apy.toFixed(2)}% APY`,'',1)+card('Monthly interest',T.mon,'All accounts','',1)+card('Annual interest',T.ann,'All accounts at current APY','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026 · since Jan 1, 2026`,'',1);
  document.getElementById('acards').innerHTML=A.map(a=>card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${a.apy}% APY`,a.bal,`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`,bar(a.bal/T.bal*100,COL[a.k]))).join('');
- tbl('tAcc',['Account','Balance','APY','Monthly interest','Annual interest','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,M(a.bal),N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
+ tbl('tAcc',['Account','Balance','APY','Monthly interest','Annual interest','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,{v:`<input class="bal" data-k="${a.k}" type="text" inputmode="decimal" value="${a.bal.toLocaleString('en-US',{maximumFractionDigits:2})}">`,c:'ed',d:a.bal},N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
  const lab=s=>MO[+s.slice(5,7)-1]+' '+s.slice(0,4);
  stacked('cProj',D.proj.map(r=>({label:lab(r[0]),vals:Object.fromEntries(A.map((a,i)=>[a.k,r[1+i]]))})),A.map(a=>a.k),COL,nm);
  tbl('tProj',['Month',...A.map(a=>a.name+' interest'),'Total interest','Cumulative'],D.proj.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map(a=>M(a.ann)),M(T.ann),'—']);
  if(D.tax)tbl('tTax',['Year','Bank','Interest (per tax return)'],D.tax.map(r=>[r[0],r[1],M(r[2])]),['TOTAL','',M(D.tax.reduce((a,r)=>a+r[2],0))]);
  tbl('tHist',['Month',...A.map(a=>a.name+' interest'),'Total interest','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
  fx();}
-async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;}catch(x){document.getElementById('err').textContent='Wrong password';return;}
+async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;applyEdits();}catch(x){document.getElementById('err').textContent='Wrong password';return;}
  document.getElementById('gate').remove();document.getElementById('app').style.display='';document.getElementById('gen').textContent='Updated '+D.generated;render();}
 if(sessionStorage.svpw){document.getElementById('pw').value=sessionStorage.svpw;go(new Event('submit'));}
 </script><!--SORTABLE-START--><script>
