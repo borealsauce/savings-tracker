@@ -73,7 +73,7 @@ async function decrypt(pw){const e=await (await fetch('data.enc.json',{cache:'no
  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(e.salt),iterations:e.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(e.iv)},key,b64(e.ct))));}
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e',wellsfargo:'#ef4444'};
+const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e',wellsfargo:'#ef4444',vio:'#a78bfa',coinbase:'#0052ff',openbank:'#f97316',marcus:'#94a3b8',etrade:'#67e8f9',wealthfront:'#34d399'};
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const r2=v=>Math.round(v*100)/100;
 const $=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
