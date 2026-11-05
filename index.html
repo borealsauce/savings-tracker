@@ -57,10 +57,11 @@ input.bal:focus{outline:1px solid var(--gold)}
 td.ed{padding:4px 8px!important}
 </style></head><body>
 <div id="gate"><form onsubmit="go(event)"><h1>Savings Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
-<div class="top"><div class="wrap"><h1>Savings Tracker</h1><div class="muted">Pibank · X Money · Schwab stocks · <span id="gen"></span></div></div></div>
+<div class="top"><div class="wrap"><h1>Savings Tracker</h1><div class="muted">Pibank · X Money · Schwab · Wells Fargo · <span id="gen"></span></div></div></div>
 <div class="wrap" id="app" style="display:none"><section>
 <div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="editbar"><button type="button" onclick="saveEdits()">Save balances</button><button type="button" class="ghost" onclick="resetEdits()">Reset to published</button><span class="hint" id="editHint">Click a balance to edit · saved in this browser</span></div><div class="cards" id="acards"></div>
 <h2>Account Summary</h2><div class="scroll" id="tAcc"></div>
+<h2>Credit Card Liabilities</h2><div class="cards" id="liabCards" style="margin-bottom:12px"></div><div class="scroll" id="tLiab"></div>
 <h2>Interest Earned · 2026</h2><div class="scroll" id="tHist"></div>
 <h2>Prior Years · Interest by Bank (per tax return)</h2><div class="muted" style="font-size:12px;margin-bottom:6px">Schedule B actuals. 2021–2022 returns unreadable, not included.</div><div class="scroll" id="tTax"></div>
 <h2>Interest by Month · Next 12 Months</h2><div class="chartbox" id="cProj"></div><div class="scroll" style="margin-top:12px" id="tProj"></div>
@@ -72,7 +73,7 @@ async function decrypt(pw){const e=await (await fetch('data.enc.json',{cache:'no
  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(e.salt),iterations:e.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(e.iv)},key,b64(e.ct))));}
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e'};
+const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e',wellsfargo:'#ef4444'};
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const r2=v=>Math.round(v*100)/100;
 const $=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -125,7 +126,10 @@ function fx(){const vis=[...document.querySelectorAll('#app section')].filter(s=
  vis.forEach(s=>s.querySelectorAll('td:not(.t),.card .v').forEach(e=>{if(e.children.length==0)countUp(e)}));
  setTimeout(()=>document.querySelectorAll('.bar i').forEach(i=>i.style.width=i.dataset.w+'%'),RM?0:300);}
 function render(){const A=D.acc,T=D.tot,nm=Object.fromEntries(A.map(a=>[a.k,a.name]));
- document.getElementById('hero').innerHTML=card('Total savings',T.bal,`${A.length} accounts · blended ${T.apy.toFixed(2)}% APY`,'',1)+card('Monthly interest',T.mon,'All accounts','',1)+card('Annual interest',T.ann,'All accounts at current APY','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026 · since Jan 1, 2026`,'',1);
+ const L=D.liab||{},cc=(L.cc||{}),ccTot=cc.total||0;
+ document.getElementById('hero').innerHTML=card('Total savings',T.bal,`${A.length} accounts · blended ${T.apy.toFixed(2)}% APY`,'',1)+card('Monthly interest',T.mon,'Cash APY accounts only','',1)+card('Annual interest',T.ann,'Cash APY accounts only','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026 · since Jan 1, 2026`,'',1)+card('Credit card liabilities',ccTot,`Net across ${((cc.rows)||[]).length} cards · owed ${$(cc.owed||ccTot)}`,'',1)+card('Savings minus CC',r2(T.bal-ccTot),'Total savings − card balances','',1);
+ if(document.getElementById('liabCards'))document.getElementById('liabCards').innerHTML=card('Total credit card liabilities',ccTot,`Updated with account balances`,'',1)+card('Cards with balance',((cc.rows)||[]).filter(r=>r[1]>0).length,`of ${((cc.rows)||[]).length} linked cards`)+card('Largest balance',Math.max(0,...((cc.rows)||[]).map(r=>r[1])),((cc.rows)||[]).slice().sort((a,b)=>b[1]-a[1])[0]?.[0]||'—');
+ if(document.getElementById('tLiab')&&cc.rows)tbl('tLiab',['Card','Balance owed'],cc.rows.map(r=>[r[0],M(r[1])]),['TOTAL',M(ccTot)]);
  document.getElementById('acards').innerHTML=A.map(a=>card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${a.apy}% APY`,a.bal,`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`,bar(a.bal/T.bal*100,COL[a.k]))).join('');
  tbl('tAcc',['Account','Balance','APY','Monthly interest','Annual interest','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,{v:`<input class="bal" data-k="${a.k}" type="text" inputmode="decimal" value="${a.bal.toLocaleString('en-US',{maximumFractionDigits:2})}">`,c:'ed',d:a.bal},N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
  const lab=s=>MO[+s.slice(5,7)-1]+' '+s.slice(0,4);
