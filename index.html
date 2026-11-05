@@ -57,7 +57,7 @@ input.bal:focus{outline:1px solid var(--gold)}
 td.ed{padding:4px 8px!important}
 </style></head><body>
 <div id="gate"><form onsubmit="go(event)"><h1>Savings Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
-<div class="top"><div class="wrap"><h1>Savings Tracker</h1><div class="muted">Pibank · X Money · <span id="gen"></span></div></div></div>
+<div class="top"><div class="wrap"><h1>Savings Tracker</h1><div class="muted">Pibank · X Money · Schwab stocks · <span id="gen"></span></div></div></div>
 <div class="wrap" id="app" style="display:none"><section>
 <div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="editbar"><button type="button" onclick="saveEdits()">Save balances</button><button type="button" class="ghost" onclick="resetEdits()">Reset to published</button><span class="hint" id="editHint">Click a balance to edit · saved in this browser</span></div><div class="cards" id="acards"></div>
 <h2>Account Summary</h2><div class="scroll" id="tAcc"></div>
@@ -72,7 +72,7 @@ async function decrypt(pw){const e=await (await fetch('data.enc.json',{cache:'no
  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(e.salt),iterations:e.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(e.iv)},key,b64(e.ct))));}
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const COL={pibank:'#38bdf8',xmoney:'#e8b923'};
+const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e'};
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const r2=v=>Math.round(v*100)/100;
 const $=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
