@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="data:,"><title>Savings Tracker</title><!-- v2-20261105b -->
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="data:,"><title>Savings Tracker</title><!-- v3-20261111 -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#050505;--line:#262626;--gold:#e8b923;--txt:#f5f5f5;--muted:#a3a3a3;--red:#ff2d3a;--green:#22c55e;--surf:#141414;--surf2:#1c1c1c;--gb:#e8b92347}
@@ -52,6 +52,7 @@ tr.cur td{background:#e8b92326!important;font-weight:700}
 .editbar button{font:700 13px Inter;padding:8px 14px;border:0;border-radius:999px;background:var(--gold);color:#050505;cursor:pointer}
 .editbar button.ghost{background:transparent;color:var(--gold);border:1px solid var(--gb)}
 .editbar .hint{color:var(--muted);font-size:12px}
+input.apy{width:70px;font:600 14px Inter;padding:6px 8px;border:1px solid var(--gb);border-radius:8px;background:#0c0c0c;color:var(--txt);text-align:right}
 input.bal{width:140px;font:600 14px Inter;padding:6px 8px;border:1px solid var(--gb);border-radius:8px;background:#0c0c0c;color:var(--txt);text-align:right}
 input.bal:focus{outline:1px solid var(--gold)}
 td.ed{padding:4px 8px!important}
@@ -59,7 +60,7 @@ td.ed{padding:4px 8px!important}
 <div id="gate"><form onsubmit="go(event)"><h1>Savings Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
 <div class="top"><div class="wrap"><h1>Savings Tracker</h1><div class="muted">Liquidation view · Pibank · X Money · Schwab · Wells · <span id="gen"></span></div></div></div>
 <div class="wrap" id="app" style="display:none"><section>
-<div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="editbar"><button type="button" onclick="saveEdits()">Save balances</button><button type="button" class="ghost" onclick="resetEdits()">Reset to published</button><span class="hint" id="editHint">Click a balance to edit · saved in this browser · Schwab is net equity (stocks + cash − short puts)</span></div><div class="cards" id="acards"></div>
+<div class="cards" id="hero" style="margin-top:18px"></div><h2>Accounts</h2><div class="editbar"><button type="button" onclick="saveEdits()">Save balances &amp; APYs</button><button type="button" class="ghost" onclick="resetEdits()">Reset to published</button><span class="hint" id="editHint">Click a balance or APY to edit · totals recalc instantly · saved in this browser · Schwab is net equity (stocks + cash − short puts)</span></div><div class="cards" id="acards"></div>
 <h2>Account Summary</h2><div class="scroll" id="tAcc"></div>
 <h2>Credit Card Liabilities</h2><div class="cards" id="liabCards" style="margin-bottom:12px"></div><div class="scroll" id="tLiab"></div>
 <h2>Interest Earned · 2026</h2><div class="scroll" id="tHist"></div>
@@ -73,7 +74,7 @@ async function decrypt(pw){const e=await (await fetch('data.enc.json',{cache:'no
  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(e.salt),iterations:e.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(e.iv)},key,b64(e.ct))));}
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e',wellsfargo:'#ef4444',vio:'#a78bfa',coinbase:'#0052ff',openbank:'#f97316',marcus:'#94a3b8',etrade:'#67e8f9',wealthfront:'#34d399'};
+const COL={pibank:'#38bdf8',xmoney:'#e8b923',schwab:'#22c55e',wellsfargo:'#ef4444',vio:'#a78bfa',coinbase:'#0052ff',openbank:'#f97316',marcus:'#94a3b8',etrade:'#67e8f9',wealthfront:'#34d399',nwm:'#c084fc'};
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const r2=v=>Math.round(v*100)/100;
 const $=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -89,27 +90,32 @@ const sum=a=>r2(a.reduce((x,y)=>x+(y||0),0));
 
 const LS='savings_balances_v1';
 function loadEdits(){try{return JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){return{}}}
-function applyEdits(){const e=loadEdits();let ch=false;D.acc.forEach(a=>{if(e[a.k]!=null&&isFinite(+e[a.k])){a.bal=+e[a.k];ch=true}});
+const LSA='savings_apy_v1';const PUBAPY={};
+function loadApy(){try{return JSON.parse(localStorage.getItem(LSA)||'{}')}catch(e){return{}}}
+const IA=()=>D.acc.filter(a=>!a.noint);
+const CA=()=>D.acc.filter(a=>a.k!=='schwab'&&!a.noint);
+function applyEdits(){const e=loadEdits(),ea=loadApy();let ch=false;D.acc.forEach(a=>{if(e[a.k]!=null&&isFinite(+e[a.k])){a.bal=+e[a.k];ch=true}if(!a.noint&&a.k!=='schwab'&&ea[a.k]!=null&&isFinite(+ea[a.k])){a.apy=+ea[a.k];ch=true}});
   D.acc.forEach(a=>{
     if(a.k==='schwab'&&(a.div_ann!=null||(D.div_proj&&D.div_proj.ann!=null))){
       a.div_ann=a.div_ann!=null?a.div_ann:D.div_proj.ann; a.div_mon=a.div_mon!=null?a.div_mon:D.div_proj.mon;
       a.ann=a.div_ann; a.mon=a.div_mon; a.apy=a.bal?r2(a.div_ann/a.bal*100):0; a.income='dividends';
-    } else { a.ann=r2(a.bal*a.apy/100); a.mon=r2(a.ann/12); }
+    } else if(a.noint){ a.apy=0; a.ann=0; a.mon=0; } else { a.ann=r2(a.bal*a.apy/100); a.mon=r2(a.ann/12); }
   });
   const T=D.tot;T.bal=r2(D.acc.reduce((s,a)=>s+a.bal,0));T.ann=r2(D.acc.reduce((s,a)=>s+a.ann,0));T.mon=r2(T.ann/12);T.apy=T.bal?r2(T.ann/T.bal*100):0;
   // rebuild hist/proj monthly interest columns from current bals
-  const rebuild=rows=>rows.map(r=>{const mons=D.acc.map(a=>a.mon);const tot=r2(mons.reduce((x,y)=>x+y,0));return [r[0],...mons,tot,0]});
+  const rebuild=rows=>rows.map(r=>{const mons=IA().map(a=>a.mon);const tot=r2(mons.reduce((x,y)=>x+y,0));return [r[0],...mons,tot,0]});
   D.hist=rebuild(D.hist);let c=0;D.hist.forEach(r=>{c=r2(c+r[r.length-2]);r[r.length-1]=c});
   D.proj=rebuild(D.proj);c=0;D.proj.forEach(r=>{c=r2(c+r[r.length-2]);r[r.length-1]=c});
   D.ytd=r2(D.hist.reduce((s,r)=>s+r[r.length-2],0));
-  const cash=r2(D.acc.filter(a=>a.k!=='schwab').reduce((s,a)=>s+a.bal,0));
+  const cash=r2(CA().reduce((s,a)=>s+a.bal,0));
   D.cash_tot=cash;
   if(D.cash_hist&&D.cash_hist.length)D.cash_hist=D.cash_hist.map(r=>[r[0],cash]);
   else{const y=new Date().getFullYear();D.cash_hist=[];for(let m=1;m<=12;m++)D.cash_hist.push([`${y}-${String(m).padStart(2,'0')}-01`,cash]);}
   return ch;}
-function saveEdits(){const e={};document.querySelectorAll('input.bal').forEach(inp=>{const v=parseFloat(String(inp.value).replace(/[$,]/g,''));if(isFinite(v))e[inp.dataset.k]=v});
-  localStorage.setItem(LS,JSON.stringify(e));applyEdits();document.getElementById('editHint').textContent='Saved locally · '+new Date().toLocaleString();render();}
-function resetEdits(){localStorage.removeItem(LS);location.reload();}
+function saveEdits(){const e=loadEdits(),ea=loadApy();document.querySelectorAll('input.bal').forEach(inp=>{const v=parseFloat(String(inp.value).replace(/[$,]/g,''));if(isFinite(v))e[inp.dataset.k]=v});
+  document.querySelectorAll('input.apy').forEach(inp=>{const v=parseFloat(String(inp.value).replace(/[%,\s]/g,''));const k=inp.dataset.k;if(isFinite(v)){if(PUBAPY[k]!=null&&v===PUBAPY[k])delete ea[k];else ea[k]=v}});
+  localStorage.setItem(LS,JSON.stringify(e));localStorage.setItem(LSA,JSON.stringify(ea));applyEdits();document.getElementById('editHint').textContent='Saved locally · '+new Date().toLocaleString();render();}
+function resetEdits(){localStorage.removeItem(LS);localStorage.removeItem(LSA);location.reload();}
 
 
 function cashBars(id,rows){const W=900,Hh=220,P=52;const vals=rows.map(r=>r[1]);const mx=Math.max(...vals,1);
@@ -148,19 +154,20 @@ function fx(){const vis=[...document.querySelectorAll('#app section')].filter(s=
  setTimeout(()=>document.querySelectorAll('.bar i').forEach(i=>i.style.width=i.dataset.w+'%'),RM?0:300);}
 function render(){const A=D.acc,T=D.tot,nm=Object.fromEntries(A.map(a=>[a.k,a.name]));
  const L=D.liab||{},cc=(L.cc||{}),ccTot=cc.total||0,liq=r2(T.bal-ccTot);
- const cashTot=r2(A.filter(a=>a.k!=='schwab').reduce((s,a)=>s+a.bal,0));
- document.getElementById('hero').innerHTML=card('Cash savings',cashTot,`Excludes Schwab · ${A.filter(a=>a.k!=='schwab').length} cash accounts`,'',1)+card('If liquidated today',liq,`All assets − credit cards`,'',1)+card('Credit card liabilities',ccTot,`Net across ${((cc.rows)||[]).length} linked cards`,'',1)+card('Monthly income',T.mon,'Cash interest + Schwab projected dividends','',1)+card('Annual income',T.ann,'Cash interest + Schwab Investment Income proj','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026`,'',1);
+ const cashTot=r2(CA().reduce((s,a)=>s+a.bal,0));
+ document.getElementById('hero').innerHTML=card('Cash savings',cashTot,`Excludes Schwab &amp; NW Mutual cash value · ${CA().length} cash accounts`,'',1)+card('If liquidated today',liq,`All assets − credit cards`,'',1)+card('Credit card liabilities',ccTot,`Net across ${((cc.rows)||[]).length} linked cards`,'',1)+card('Monthly income',T.mon,'Cash interest + Schwab projected dividends','',1)+card('Annual income',T.ann,'Cash interest + Schwab Investment Income proj','',1)+card('Interest earned 2026 YTD',D.ytd,`Jan–${MO[D.hist.length-1]} 2026`,'',1);
  if(document.getElementById('liabCards'))document.getElementById('liabCards').innerHTML=card('Total credit card liabilities',ccTot,`Updated with account balances`,'',1)+card('Cards with balance',((cc.rows)||[]).filter(r=>r[1]>0).length,`of ${((cc.rows)||[]).length} linked cards`)+card('Largest balance',Math.max(0,...((cc.rows)||[]).map(r=>r[1])),((cc.rows)||[]).slice().sort((a,b)=>b[1]-a[1])[0]?.[0]||'—');
  if(document.getElementById('tLiab')&&cc.rows)tbl('tLiab',['Card','Balance owed'],cc.rows.map(r=>[r[0],M(r[1])]),['TOTAL',M(ccTot)]);
- document.getElementById('acards').innerHTML=A.map(a=>{const lab=a.income==='dividends'?`proj dividends · Schwab Investment Income${a.div_asof||(D.div_proj&&D.div_proj.asof)?' · as of '+(a.div_asof||D.div_proj.asof):''}`:`${a.apy}% APY`; const sub=a.income==='dividends'?`${$(a.mon)}/mo · ${$(a.ann)}/yr projected`:`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`; return card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${lab}`,a.bal,sub,bar(a.bal/T.bal*100,COL[a.k]));}).join('');
- tbl('tAcc',['Account','Balance','APY / yield','Monthly income','Annual income','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,{v:`<input class="bal" data-k="${a.k}" type="text" inputmode="decimal" value="${a.bal.toLocaleString('en-US',{maximumFractionDigits:2})}">`,c:'ed',d:a.bal},N(a.apy,'%'),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
+ document.getElementById('acards').innerHTML=A.map(a=>{const lab=a.income==='dividends'?`proj dividends · Schwab Investment Income${a.div_asof||(D.div_proj&&D.div_proj.asof)?' · as of '+(a.div_asof||D.div_proj.asof):''}`:(a.noint?'cash value · no interest':`${a.apy}% APY`); const sub=a.noint?'Counted in asset total · excluded from interest':a.income==='dividends'?`${$(a.mon)}/mo · ${$(a.ann)}/yr projected`:`${$(a.mon)}/mo · ${$(a.ann)}/yr interest`; return card(`<span class="dot" style="background:${COL[a.k]}"></span>${a.name} · ${lab}`,a.bal,sub,bar(a.bal/T.bal*100,COL[a.k]));}).join('');
+ tbl('tAcc',['Account','Balance','APY / yield','Monthly income','Annual income','Share of savings'],A.map(a=>[`<span class="dot" style="background:${COL[a.k]}"></span>${a.name}`,{v:`<input class="bal" data-k="${a.k}" type="text" inputmode="decimal" value="${a.bal.toLocaleString('en-US',{maximumFractionDigits:2})}">`,c:'ed',d:a.bal},(a.income==='dividends'?N(a.apy,'%'):a.noint?{v:'—',d:0}:{v:`<input class="apy" data-k="${a.k}" type="text" inputmode="decimal" value="${a.apy}">%`,c:'ed',d:a.apy}),M(a.mon),M(a.ann),N(r2(a.bal/T.bal*100),'%')]),['TOTAL',M(T.bal),N(T.apy,'%'),M(T.mon),M(T.ann),N(100,'%')]);
  const lab=s=>MO[+s.slice(5,7)-1]+' '+s.slice(0,4);
 
  if(D.tax){const by={};D.tax.forEach(r=>{by[r[0]]=(by[r[0]]||0)+r[2]});const yrs=Object.keys(by).map(Number).sort((a,b)=>b-a);tbl('tTax',['Year','Interest earned'],yrs.map(y=>[y,M(by[y])]),['TOTAL',M(yrs.reduce((s,y)=>s+by[y],0))]);}
- tbl('tHist',['Month',...A.map(a=>a.income==='dividends'?a.name+' dividends':a.name+' interest'),'Total income','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...A.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
+ const IAa=IA();tbl('tHist',['Month',...IAa.map(a=>a.income==='dividends'?a.name+' dividends':a.name+' interest'),'Total income','Cumulative'],D.hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},...r.slice(1).map(M)]),['TOTAL',...IAa.map((a,i)=>M(sum(D.hist.map(r=>r[1+i])))),M(D.ytd),'—']);
  if(document.getElementById('cCash')&&D.cash_hist){cashBars('cCash',D.cash_hist);tbl('tCash',['Month','Cash held'],D.cash_hist.map(r=>[{v:lab(r[0]),d:Date.parse(r[0])},M(r[1])]),['AVG / NOW',M(D.cash_tot||0)]);}
+ document.querySelectorAll('input.bal,input.apy').forEach(i=>i.addEventListener('change',saveEdits));
  fx();}
-async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;applyEdits();}catch(x){document.getElementById('err').textContent='Wrong password';return;}
+async function go(e){e.preventDefault();try{const pw=document.getElementById('pw').value;D=await decrypt(pw);sessionStorage.svpw=pw;D.acc.forEach(a=>PUBAPY[a.k]=a.apy);applyEdits();}catch(x){document.getElementById('err').textContent='Wrong password';return;}
  document.getElementById('gate').remove();document.getElementById('app').style.display='';document.getElementById('gen').textContent='Updated '+D.generated;render();}
 if(sessionStorage.svpw){document.getElementById('pw').value=sessionStorage.svpw;go(new Event('submit'));}
 </script><!--SORTABLE-START--><script>
